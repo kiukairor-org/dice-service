@@ -4,10 +4,21 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math/rand/v2"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
+
+const (
+	defaultSides = 6
+	minSides     = 2
+	maxSides     = 100
+)
+
+// randIntn returns a random int in [0, n). Tests replace it for determinism.
+var randIntn = rand.IntN
 
 // version is set at build time: -ldflags "-X main.version=<git sha>".
 var version = "dev"
@@ -30,7 +41,26 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"app": appName(), "version": version})
 	})
+	mux.HandleFunc("GET /roll", handleRoll)
 	return mux
+}
+
+func handleRoll(w http.ResponseWriter, r *http.Request) {
+	sides := defaultSides
+	q := r.URL.Query()
+	if q.Has("sides") {
+		n, err := strconv.Atoi(q.Get("sides"))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sides must be an integer"})
+			return
+		}
+		sides = n
+	}
+	if sides < minSides || sides > maxSides {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sides must be between 2 and 100"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"sides": sides, "result": randIntn(sides) + 1})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
